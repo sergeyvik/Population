@@ -1,0 +1,31 @@
+# Конфигурация симуляции по умолчанию
+# Запуск: uv run population simulate --config configs/default.yaml
+
+# Начальная популяция
+men: 50000
+women: 50000
+
+# Возрастное распределение
+# Варианты: pyramid | pyramid:0.04 | uniform:20-60 | normal:35:12 | single:30 | config:FILE
+age_dist: pyramid
+
+# Демографические параметры
+birth_rate: 0.066        # рождений на фертильную женщину в год
+                         # TFR ≈ birth_rate × (fertility_end - fertility_start + 1)
+                         # 0.066 × 35 ≈ 2.3 детей на женщину (мировой уровень 2026)
+fertility_start: 15      # начало фертильного возраста
+fertility_end: 49        # конец фертильного возраста
+mortality: gompertz      # таблица Гомперца (реалистичная)
+male_multiplier: 1.08    # смертность мужчин выше на 8%
+sex_ratio: "0.510-0.516" # доля мальчиков среди новорождённых (диапазон = каждый год случайно)
+
+# Параметры симуляции
+start_year: 0
+years: 50
+
+# Параметры вывода
+output: both             # none | show | save | both
+output_dir: ./output/default
+format: png              # png | svg
+animate: false           # создать GIF-анимацию
+interval: 10             # снимок каждые N лет

@@ -1,0 +1,12 @@
+# Виртуальное окружение Python
+.venv/
+
+# Claude Code
+.claude/
+
+# Результаты работы программы
+output/
+
+# Кэш Python
+__pycache__/
+*.pyc

@@ -1,0 +1,26 @@
+# Пример: развивающаяся страна с высокой рождаемостью
+# Молодая пирамида, высокая рождаемость, средняя смертность
+# Запуск: uv run population simulate --config configs/pyramid_example.yaml
+
+men: 30000
+women: 32000
+
+# Явное возрастное распределение (из файла)
+# Можно заменить на: normal:22:15 или pyramid:0.04
+age_dist: pyramid:0.04
+
+birth_rate: 0.09          # высокая рождаемость (TFR ≈ 3.2)
+fertility_start: 15
+fertility_end: 44
+mortality: gompertz
+male_multiplier: 1.10
+sex_ratio: 0.515
+
+start_year: 2025
+years: 100
+
+output: both
+output_dir: ./output/pyramid_example
+format: png
+animate: true
+interval: 5

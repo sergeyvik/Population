@@ -129,4 +129,6 @@ def parse_mortality(spec: str, male_multiplier: float = 1.08) -> tuple[np.ndarra
             rate = float(spec)
         except ValueError:
             raise ValueError(f"Неверная спецификация смертности: '{spec}'. Ожидается 'gompertz', число или 'config:путь'")
+        if rate <= 0:
+            raise ValueError(f"Плоский коэффициент смертности должен быть > 0, получено: {rate}")
         return build_flat_table(rate, male_multiplier=male_multiplier)

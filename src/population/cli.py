@@ -47,14 +47,14 @@ def _parse_sex_ratio(spec: str) -> tuple[float, tuple[float, float] | None]:
       '0.510-0.516'  — равномерный диапазон, каждый год семплируется случайно
     """
     spec = spec.strip()
-    if "-" in spec:
+    if "-" in spec and not spec.startswith("-"):
         parts = spec.split("-", 1)
         lo, hi = float(parts[0]), float(parts[1])
         if lo > hi:
             lo, hi = hi, lo
         if not (0.0 < lo < 1.0 and 0.0 < hi < 1.0):
             raise ValueError(f"Значения sex-ratio должны быть в диапазоне (0, 1): {spec}")
-        return lo, (lo, hi)   # фиксированное = середина диапазона не нужна, возвращаем lo как заглушку
+        return (lo + hi) / 2, (lo, hi)
     else:
         val = float(spec)
         if not (0.0 < val < 1.0):
@@ -208,6 +208,24 @@ def simulate(
         raise typer.Exit(1)
 
     # Валидация
+    if r_men <= 0 or r_women <= 0:
+        console.print("[red]Ошибка:[/red] --men и --women должны быть положительными числами")
+        raise typer.Exit(1)
+    if r_years <= 0:
+        console.print("[red]Ошибка:[/red] --years должен быть положительным числом")
+        raise typer.Exit(1)
+    if r_birth_rate <= 0:
+        console.print("[red]Ошибка:[/red] --birth-rate должен быть положительным числом")
+        raise typer.Exit(1)
+    if r_male_mult <= 0:
+        console.print("[red]Ошибка:[/red] --male-multiplier должен быть положительным числом")
+        raise typer.Exit(1)
+    if r_interval <= 0:
+        console.print("[red]Ошибка:[/red] --interval должен быть положительным числом")
+        raise typer.Exit(1)
+    if not (0 <= r_fertility_start <= 100 and 0 <= r_fertility_end <= 100):
+        console.print("[red]Ошибка:[/red] fertility-start и fertility-end должны быть в диапазоне [0, 100]")
+        raise typer.Exit(1)
     if r_fertility_start >= r_fertility_end:
         console.print("[red]Ошибка:[/red] fertility-start должен быть меньше fertility-end")
         raise typer.Exit(1)
@@ -289,10 +307,8 @@ def simulate(
     if r_output == "none":
         return
 
-    from population.visualization import save_pyramid, show_pyramid
-    snapshots = [s for i, s in enumerate(history) if i % r_interval == 0]
-    if history[-1] not in snapshots:
-        snapshots.append(history[-1])
+    from population.visualization import save_pyramid, show_pyramid, _select_snapshots
+    snapshots = _select_snapshots(history, r_interval)
 
     # Сохранение PNG-снимков (всегда, независимо от --animate)
     if do_save:
@@ -305,7 +321,7 @@ def simulate(
         ) as progress:
             task = progress.add_task("Сохранение пирамид...", total=len(snapshots))
             for state in snapshots:
-                save_pyramid(state, r_output_dir, fmt=r_fmt)
+                save_pyramid(state, r_output_dir, fmt=r_fmt, start_year=r_start_year)
                 progress.advance(task)
         console.print(f"[green]Пирамиды сохранены в:[/green] {r_output_dir}")
 
@@ -315,15 +331,17 @@ def simulate(
         gif_path: str | None = None
         if do_save:
             with console.status("Создание анимации..."):
-                gif_path = save_animation(history, r_output_dir, interval_years=r_interval)
+                gif_path = save_animation(history, r_output_dir, interval_years=r_interval,
+                                          start_year=r_start_year)
             console.print(f"[green]Анимация сохранена:[/green] {gif_path}")
         if do_show:
             console.print("Открываю анимацию в системном просмотрщике...")
-            show_animation(history, interval_years=r_interval, saved_path=gif_path)
+            show_animation(history, interval_years=r_interval, saved_path=gif_path,
+                           start_year=r_start_year)
     else:
         if do_show:
             for state in snapshots:
-                show_pyramid(state)
+                show_pyramid(state, start_year=r_start_year)
 
 
 @app.command("validate-config")
@@ -367,5 +385,46 @@ def validate_config(
     except Exception as e:
         console.print(f"[red]Ошибка распределения:[/red] {e}")
         raise typer.Exit(1)
+
+    # Проверяем соотношение полов
+    sex_ratio_spec = str(cfg.get("sex_ratio", "0.510-0.516"))
+    try:
+        _parse_sex_ratio(sex_ratio_spec)
+        console.print(f"[green]Соотношение полов[/green] '{sex_ratio_spec}' — ОК")
+    except ValueError as e:
+        console.print(f"[red]Ошибка sex-ratio:[/red] {e}")
+        raise typer.Exit(1)
+
+    # Проверяем числовые диапазоны
+    errors: list[str] = []
+    r_men_v = int(cfg.get("men", 50_000))
+    r_women_v = int(cfg.get("women", 50_000))
+    r_years_v = int(cfg.get("years", 50))
+    r_birth_rate_v = float(cfg.get("birth_rate", 0.066))
+    r_male_mult_v = float(cfg.get("male_multiplier", 1.08))
+    r_interval_v = int(cfg.get("interval", 5))
+    r_fert_start = int(cfg.get("fertility_start", 15))
+    r_fert_end = int(cfg.get("fertility_end", 49))
+    if r_men_v <= 0:
+        errors.append("men должен быть положительным числом")
+    if r_women_v <= 0:
+        errors.append("women должен быть положительным числом")
+    if r_years_v <= 0:
+        errors.append("years должен быть положительным числом")
+    if r_birth_rate_v <= 0:
+        errors.append("birth_rate должен быть положительным числом")
+    if r_male_mult_v <= 0:
+        errors.append("male_multiplier должен быть положительным числом")
+    if r_interval_v <= 0:
+        errors.append("interval должен быть положительным числом")
+    if not (0 <= r_fert_start <= 100 and 0 <= r_fert_end <= 100):
+        errors.append("fertility_start и fertility_end должны быть в диапазоне [0, 100]")
+    elif r_fert_start >= r_fert_end:
+        errors.append(f"fertility_start ({r_fert_start}) должен быть меньше fertility_end ({r_fert_end})")
+    if errors:
+        for err in errors:
+            console.print(f"[red]Ошибка:[/red] {err}")
+        raise typer.Exit(1)
+    console.print("[green]Числовые параметры[/green] — ОК")
 
     console.print("\n[bold green]Конфиг прошёл валидацию.[/bold green]")

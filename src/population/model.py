@@ -100,7 +100,7 @@ class PopulationModel:
         initial_males: np.ndarray,
         initial_females: np.ndarray,
         params: SimulationParams,
-        start_year: int = 2025,
+        start_year: int = 0,
     ):
         self.params = params
         self.start_year = start_year
@@ -141,8 +141,8 @@ class PopulationModel:
         new_f[1:101] = survivors_f[0:100]
         new_f[100] += survivors_f[100]
 
-        # 3. Рождения
-        fertile_women = prev.females[p.fertility_start:p.fertility_end + 1].sum()
+        # 3. Рождения (из выживших женщин, а не из исходной популяции)
+        fertile_women = survivors_f[p.fertility_start:p.fertility_end + 1].sum()
         total_births = fertile_women * p.birth_rate
 
         if p.sex_ratio_range is not None:

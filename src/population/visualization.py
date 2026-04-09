@@ -10,6 +10,8 @@ import numpy as np
 
 from population.model import PopulationState
 
+CALENDAR_YEAR_THRESHOLD = 1900
+
 
 # Возрастные группы (5-летние когорты)
 AGE_GROUPS = [
@@ -30,7 +32,7 @@ def _aggregate_to_groups(arr: np.ndarray) -> np.ndarray:
     return result
 
 
-def _draw_pyramid(ax, state: PopulationState) -> None:
+def _draw_pyramid(ax, state: PopulationState, start_year: int = 0) -> None:
     """Рисует пирамиду на переданном ax (без создания fig)."""
     import matplotlib.ticker as mticker
 
@@ -68,7 +70,8 @@ def _draw_pyramid(ax, state: PopulationState) -> None:
             ha="right", va="top", fontsize=10, color="#e07070", fontweight="bold",
             transform=ax.transAxes)
 
-    ax.set_title(f"Половозрастная пирамида — {state.year} {'год' if state.year >= 1900 else 'лет'}",
+    year_label = "год" if state.year >= CALENDAR_YEAR_THRESHOLD else "лет"
+    ax.set_title(f"Половозрастная пирамида — {state.year} {year_label}",
                  fontsize=13, fontweight="bold", pad=14)
     ax.set_xlabel("Численность населения", fontsize=9)
     ax.set_ylabel("Возрастная группа", fontsize=9)
@@ -94,46 +97,46 @@ def _draw_pyramid(ax, state: PopulationState) -> None:
     ax.grid(axis="x", linestyle="--", alpha=0.4, linewidth=0.6)
 
 
-def _make_figure(state: PopulationState):
+def _make_figure(state: PopulationState, start_year: int = 0):
     """Создаёт фигуру с пирамидой для одного состояния."""
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(10, 8))
-    _draw_pyramid(ax, state)
+    _draw_pyramid(ax, state, start_year=start_year)
     fig.tight_layout()
     return fig, ax
 
 
-def show_pyramid(state: PopulationState) -> None:
+def show_pyramid(state: PopulationState, start_year: int = 0) -> None:
     """Показывает пирамиду в интерактивном окне."""
     import matplotlib.pyplot as plt
-    fig, _ = _make_figure(state)
+    fig, _ = _make_figure(state, start_year=start_year)
     plt.show()
     plt.close(fig)
 
 
-def save_pyramid(state: PopulationState, output_dir: str, fmt: str = "png") -> str:
+def save_pyramid(state: PopulationState, output_dir: str, fmt: str = "png", start_year: int = 0) -> str:
     """Сохраняет пирамиду в файл. Возвращает путь к файлу."""
     import matplotlib.pyplot as plt
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     path = os.path.join(output_dir, f"pyramid_{state.year}.{fmt}")
-    fig, _ = _make_figure(state)
-    fig.savefig(path, dpi=120, bbox_inches="tight", backend="agg")
+    fig, _ = _make_figure(state, start_year=start_year)
+    fig.savefig(path, dpi=120, bbox_inches="tight")
     plt.close(fig)
     return path
 
 
-def _build_animation(snapshots: list[PopulationState], fps: int):
+def _build_animation(snapshots: list[PopulationState], fps: int, start_year: int = 0):
     """Строит объект FuncAnimation и возвращает (fig, anim)."""
     import matplotlib.pyplot as plt
     import matplotlib.animation as animation
 
     fig, ax = plt.subplots(figsize=(10, 8))
-    _draw_pyramid(ax, snapshots[0])
+    _draw_pyramid(ax, snapshots[0], start_year=start_year)
     fig.tight_layout()
 
     def update(frame_idx: int):
-        _draw_pyramid(ax, snapshots[frame_idx])
+        _draw_pyramid(ax, snapshots[frame_idx], start_year=start_year)
         fig.tight_layout()
 
     anim = animation.FuncAnimation(
@@ -149,6 +152,8 @@ def _build_animation(snapshots: list[PopulationState], fps: int):
 def _select_snapshots(
     history: list[PopulationState], interval_years: int
 ) -> list[PopulationState]:
+    if interval_years <= 0:
+        raise ValueError(f"interval_years должен быть положительным, получено: {interval_years}")
     snapshots = [s for i, s in enumerate(history) if i % interval_years == 0]
     if history[-1] not in snapshots:
         snapshots.append(history[-1])
@@ -160,6 +165,7 @@ def save_animation(
     output_dir: str,
     interval_years: int = 1,
     fps: int = 2,
+    start_year: int = 0,
 ) -> str:
     """Создаёт анимированный GIF. Возвращает путь к файлу."""
     import matplotlib.pyplot as plt
@@ -170,7 +176,7 @@ def save_animation(
     if not snapshots:
         raise ValueError("Нет данных для анимации")
 
-    fig, anim = _build_animation(snapshots, fps)
+    fig, anim = _build_animation(snapshots, fps, start_year=start_year)
 
     gif_path = os.path.join(output_dir, "pyramid_animation.gif")
     try:
@@ -178,18 +184,20 @@ def save_animation(
         anim.save(gif_path, writer=writer, dpi=100)
         plt.close(fig)
         return gif_path
-    except Exception:
+    except Exception as gif_err:
         plt.close(fig)
         # Попытка MP4
         mp4_path = os.path.join(output_dir, "pyramid_animation.mp4")
         try:
-            fig2, anim2 = _build_animation(snapshots, fps)
+            fig2, anim2 = _build_animation(snapshots, fps, start_year=start_year)
             writer_mp4 = animation.FFMpegWriter(fps=fps)
             anim2.save(mp4_path, writer=writer_mp4)
             plt.close(fig2)
             return mp4_path
-        except Exception as e:
-            raise RuntimeError(f"Не удалось сохранить анимацию: {e}") from e
+        except Exception as mp4_err:
+            raise RuntimeError(
+                f"Не удалось сохранить анимацию. GIF: {gif_err}; MP4: {mp4_err}"
+            ) from mp4_err
 
 
 def show_animation(
@@ -197,6 +205,7 @@ def show_animation(
     interval_years: int = 1,
     fps: int = 2,
     saved_path: str | None = None,
+    start_year: int = 0,
 ) -> None:
     """Открывает анимацию в системном просмотрщике.
 
@@ -216,9 +225,15 @@ def show_animation(
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
 
-        fig, anim = _build_animation(snapshots, fps)
+        fig, anim = _build_animation(snapshots, fps, start_year=start_year)
         writer = animation.PillowWriter(fps=fps)
-        anim.save(tmp.name, writer=writer, dpi=80)
+        try:
+            anim.save(tmp.name, writer=writer, dpi=80)
+        except Exception as e:
+            plt.close(fig)
+            raise RuntimeError(
+                f"Не удалось создать анимацию. Убедитесь, что Pillow установлен: {e}"
+            ) from e
         plt.close(fig)
         path_to_open = tmp.name
 

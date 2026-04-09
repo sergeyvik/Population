@@ -29,17 +29,6 @@ def build_uniform(total: int, age_min: int, age_max: int) -> np.ndarray:
     return arr
 
 
-def build_normal(total: int, mean: float, std: float) -> np.ndarray:
-    """Нормальное распределение, усечённое до [0, 100]."""
-    from scipy.stats import norm  # type: ignore
-    ages = np.arange(101, dtype=float)
-    weights = norm.pdf(ages, loc=mean, scale=std)
-    if weights.sum() == 0:
-        weights = np.ones(101)
-    weights /= weights.sum()
-    return (weights * total).round().astype(float)
-
-
 def build_normal_no_scipy(total: int, mean: float, std: float) -> np.ndarray:
     """Нормальное распределение без scipy (через numpy)."""
     ages = np.arange(101, dtype=float)
